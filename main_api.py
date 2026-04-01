@@ -1,86 +1,34 @@
-import os
+import logging
 import time
-import json
-from pathlib import Path
 
-import requests
-from dotenv import load_dotenv
-
+from config import load_config
+from state import load_last_message_id, save_last_message_id
 from telegram_utils import send_telegram_message
+from zalo_api import fetch_recent_zalo_messages, format_zalo_message
 
-load_dotenv()
-
-ZALO_OA_ACCESS_TOKEN = os.getenv("ZALO_OA_ACCESS_TOKEN")
-POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", "30"))
-
-if not ZALO_OA_ACCESS_TOKEN:
-    raise RuntimeError("ZALO_OA_ACCESS_TOKEN must be set in .env")
-
-ZALO_API_URL = "https://openapi.zalo.me/v2.0/oa/message"
-STATE_FILE = Path(".last_message_id")
-
-
-def _load_last_message_id() -> str | None:
-    if not STATE_FILE.exists():
-        return None
-    data = STATE_FILE.read_text(encoding="utf-8").strip()
-    return data or None
-
-
-def _save_last_message_id(msg_id: str) -> None:
-    STATE_FILE.write_text(msg_id, encoding="utf-8")
-
-
-def fetch_recent_zalo_messages(limit: int = 50) -> list[dict]:
-    """Gọi API Zalo OA để lấy các tin nhắn gần nhất."""
-    headers = {
-        "access_token": ZALO_OA_ACCESS_TOKEN,
-    }
-    params = {
-        "offset": 0,
-        "limit": limit,
-    }
-
-    resp = requests.get(ZALO_API_URL, headers=headers, params=params, timeout=20)
-    resp.raise_for_status()
-    body = resp.json()
-
-    if body.get("error") != 0:
-        raise RuntimeError(f"Zalo API error: {body}")
-
-    return body.get("data", [])
-
-
-def format_zalo_message(message: dict) -> str:
-    """Chuẩn hóa nội dung tin nhắn Zalo thành văn bản Telegram-friendly."""
-    sender = message.get("sender") or {}
-    sender_name = sender.get("name", "Unknown")
-    text = message.get("text", "")
-    message_id = message.get("message_id")
-
-    text = text or "(No text content)"
-
-    return (
-        f"*Zalo message detected*\n"
-        f"- *ID*: `{message_id}`\n"
-        f"- *Sender*: {sender_name}\n"
-        f"- *Content*: {text}"
-    )
+LOG = logging.getLogger(__name__)
 
 
 def main():
-    print("Zalo -> Telegram monitor started")
-    last_seen = _load_last_message_id()
+    config = load_config()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+    if not config.zalo_oa_access_token:
+        LOG.error("ZALO_OA_ACCESS_TOKEN missing, cannot run API poll flow")
+        return
+
+    LOG.info("Starting Zalo API polling loop")
+    last_seen = load_last_message_id()
     if last_seen:
-        print(f"Starting from message ID: {last_seen}")
+        LOG.info("Starting from message ID: %s", last_seen)
 
     while True:
         try:
-            messages = fetch_recent_zalo_messages(limit=50)
+            messages = fetch_recent_zalo_messages(config.zalo_oa_access_token, limit=50)
             if not messages:
-                print("No messages returned from Zalo.")
+                LOG.info("No messages returned from Zalo API")
             else:
-                messages_sorted = sorted(messages, key=lambda m: m.get("message_id", ""))
+                messages_sorted = sorted(messages, key=lambda m: str(m.get("message_id", "")))
                 new_messages = []
 
                 for msg in messages_sorted:
@@ -91,19 +39,22 @@ def main():
                         new_messages.append(msg)
 
                 if new_messages:
-                    print(f"Found {len(new_messages)} new message(s)")
+                    LOG.info("Found %d new message(s)", len(new_messages))
                     for msg in new_messages:
-                        text = format_zalo_message(msg)
-                        send_telegram_message(text)
-                        last_seen = str(msg.get("message_id"))
-                        _save_last_message_id(last_seen)
+                        try:
+                            text = format_zalo_message(msg)
+                            send_telegram_message(config, text)
+                            last_seen = str(msg.get("message_id", ""))
+                            save_last_message_id(last_seen)
+                        except Exception:
+                            LOG.exception("Failed to handle message %s", msg.get("message_id"))
                 else:
-                    print("No new message")
+                    LOG.debug("No new message")
 
-        except Exception as exc:
-            print(f"[ERROR] {exc}")
+        except Exception:
+            LOG.exception("Error in polling loop")
 
-        time.sleep(POLL_INTERVAL_SECONDS)
+        time.sleep(config.poll_interval_seconds)
 
 
 if __name__ == "__main__":
