@@ -2,28 +2,34 @@
 
 Zalo Web keyword monitor + Telegram alert bot.
 
-## Mục tiêu
+## Kiến trúc (Architecture)
 
-- Giám sát tin nhắn Zalo (chat.zalo.me) bằng Selenium Chrome.
-- Tìm keywords trong message text.
-- Gửi cảnh báo real-time tới Telegram Bot.
+- Primary architecture: Selenium-based UI monitoring (`main_selenium.py`).
+- Legacy/experimental support: Zalo OA API polling (`main_api.py`).
+- Starter script: `main.py` là stub hướng dẫn, không tự chạy logic chính.
+
+### Lý do chọn Selenium làm chính
+
+- Thực tế Zalo không cho phép truy cập nhiều endpoint realtime qua API mở.
+- Selenium giám sát giao diện web (chat.zalo.me) phù hợp với yêu cầu giám sát keyword realtime.
+- API path giữ cho codebase có tham khảo, bài học và so sánh, tránh xóa hoàn toàn.
 
 ## Yêu cầu
 
 - Python 3.10+
-- ruột: selenium, webdriver-manager, requests, python-dotenv
-- Chrome cài bản mới tương thích chromedriver.
+- `selenium`, `webdriver-manager`, `requests`, `python-dotenv`
+- Chrome bản tương thích với webdriver.
 
 ## Cài đặt
 
-1. Sao chép repository:
+1. Clone repo:
 
    ```bash
    git clone https://github.com/Giabao2110/ZaloReceiverMessage_bot.git
    cd ZaloReceiverMessage_bot/zalo_monitor
    ```
 
-2. Tạo virtual env và cài:
+2. Tạo môi trường ảo và cài module:
 
    ```bash
    python -m venv venv
@@ -31,42 +37,50 @@ Zalo Web keyword monitor + Telegram alert bot.
    pip install -r requirements.txt
    ```
 
-3. Cấu hình `.env`:
+3. Tạo và cấu hình `.env` (tham khảo `.env.example`):
 
    ```ini
-   TELEGRAM_TOKEN=8664235001:AAF9tT6K1SYmxgResktszNsCV42ZTaE5w1o
-   TELEGRAM_CHAT_ID=5075385743
-   CHROME_USER_DATA_DIR=C:\Users\Gia Bao\AppData\Local\Google\Chrome\User Data\zalo-monitor-profile
+   TELEGRAM_TOKEN=your_telegram_bot_token_here
+   TELEGRAM_CHAT_ID=your_telegram_chat_id_here
+   CHROME_USER_DATA_DIR=C:\Users\<username>\AppData\Local\Google\Chrome\User Data\zalo-monitor-profile
    MIN_SCAN_DELAY=8
    MAX_SCAN_DELAY=15
    SELENIUM_HEADLESS=false
    KEYWORD_FILE=keyword_config.json
    ```
 
-4. Cấu hình keyword:
+4. Tạo `keyword_config.json`:
 
-   `keyword_config.json`:
    ```json
-   {"keywords":["online"]}
+   {"keywords": ["online"]}
    ```
 
-## Chạy
+## Chạy (Primary)
 
 ```bash
 venv\Scripts\activate
-python zalo_monitor.py
+python main_selenium.py
 ```
 
-- Mở Chrome profile theo `CHROME_USER_DATA_DIR`.
-- Lần đầu quét QR login Zalo.
-- Chạy sẽ tự dò message; match keyword sẽ gửi Telegram.
+## Chạy (Legacy API)
 
-## Ghi chú
+```bash
+venv\Scripts\activate
+python main_api.py
+```
 
-- Dùng `headless=true` chỉ khi đã hoạt động ổn.
-- Đảm bảo `chat_id` và token Telegram đúng.
-- Nếu không nhận alert, kiểm tra log `system.log` và content `candidate message`.
+## Giải thích các tệp entrypoint
 
-## GitHub
+- `main.py`: stub nằm ở root, góp phần chuyển hướng và giảm nhầm lẫn khi đọc
+- `main_selenium.py`: luồng chính được khuyến nghị (Selenium)
+- `main_api.py`: luồng polling API (legacy/experimental)
 
-- Repo: https://github.com/Giabao2110/ZaloReceiverMessage_bot 
+## Kiểm tra sau khi chạy
+
+- `system.log` chứa log Selenium
+- Telegram should receive message alerts when keyword appear in Zalo chat
+
+## Lưu ý
+
+- Nếu dùng headless, test ở đầu bằng `false` trước.
+- Kiểm tra quyền và đợi Chrome load xong khi tự động mở.
