@@ -1,2 +1,4 @@
-requests
-python-dotenv
+requests 
+python-dotenv 
+selenium 
+webdriver-manager 
