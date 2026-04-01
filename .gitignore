@@ -1,22 +1,37 @@
-# Python
+# Python artifacts
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 
-# Environment
+# Environment variables
 .env
+.env.*
 
-# Virtualenv
+# Virtual environments
 venv/
+.venv/
 
-# Logs
+# Logs and runtime state
 *.log
 system.log
+last_message_id.txt
+*.sqlite
+*.db
 
-# IDE
+# IDE/editor
 .vscode/
 .idea/
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# PyCharm
+*.iml
+*.ipr
+*.iws
+
+# Node (if any tooling added)
+node_modules/
+npm-debug.log*
